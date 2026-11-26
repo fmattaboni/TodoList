@@ -9,8 +9,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#2455d6">
 <style>
-:root{color-scheme:light dark;--bg:#eef1f5;--sf:#fff;--ink:#15202b;--mut:#5d6b7a;--line:#d9dfe6;--ac:#2455d6;--acink:#fff;--hi:#c92a2a;--mid:#d98200;--lo:#2b8a5a}
-@media (prefers-color-scheme:dark){:root{--bg:#0f151c;--sf:#18212b;--ink:#e6ebf0;--mut:#8a98a8;--line:#263341;--ac:#6f96ff;--acink:#0f151c;--hi:#ff7b7b;--mid:#f0a830;--lo:#5cc48c}}
+:root{color-scheme:light dark;--bg:#eef1f5;--sf:#fff;--ink:#15202b;--mut:#5d6b7a;--line:#d9dfe6;--ac:#2455d6;--acink:#fff;--hi:#c92a2a;--mid:#f0c000;--lo:#2b8a5a}
+@media (prefers-color-scheme:dark){:root{--bg:#0f151c;--sf:#18212b;--ink:#e6ebf0;--mut:#8a98a8;--line:#263341;--ac:#6f96ff;--acink:#0f151c;--hi:#ff7b7b;--mid:#ffd84a;--lo:#5cc48c}}
 *{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Avenir Next","Segoe UI",system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
 main{max-width:640px;margin:0 auto;padding:20px 16px 48px}
@@ -18,23 +18,24 @@ header{display:flex;align-items:baseline;justify-content:space-between;margin-bo
 h1{font-size:1.6rem;margin:0;letter-spacing:-.01em}
 button,input,select{font:inherit;color:inherit}
 .link{background:none;border:0;color:var(--mut);cursor:pointer;text-decoration:underline;padding:4px}
-form{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
-form input,form select{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sf);min-width:0}
-#t{grid-column:1/-1}
+form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+form input,form select,form textarea{padding:10px 12px;resize:vertical;border:1px solid var(--line);border-radius:10px;background:var(--sf);min-width:0}
+#t,#n{grid-column:1/-1}
 form button,.cta{grid-column:1/-1;padding:11px;border:0;border-radius:10px;background:var(--ac);color:var(--acink);font-weight:600;cursor:pointer}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 ul{list-style:none;margin:0;padding:0;background:var(--sf);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.t{display:flex;gap:12px;align-items:center;padding:12px 12px 12px 14px;border-bottom:1px solid var(--line);border-left:5px solid var(--mid)}
+.t{display:flex;gap:12px;align-items:center;padding:12px 12px 12px 14px;border-bottom:1px solid var(--line);border-left:10px solid var(--mid)}
 .t:last-child{border-bottom:0}
 .t.Alta{border-left-color:var(--hi)}.t.Bassa{border-left-color:var(--lo)}
 .t input{width:20px;height:20px;accent-color:var(--ac);flex:none}
 .body{flex:1;min-width:0;display:flex;flex-direction:column}
-.txt{overflow-wrap:anywhere}
+.txt{font-weight:600;overflow-wrap:anywhere}.desc{color:var(--mut);font-size:.95rem;white-space:pre-wrap;overflow-wrap:anywhere}
 .meta{font-size:.85rem;color:var(--mut);display:flex;gap:10px}
 .late .due{color:var(--hi);font-weight:600}
 .done .txt{text-decoration:line-through;color:var(--mut)}.done{opacity:.7}
 .del{background:none;border:0;color:var(--mut);cursor:pointer;font-size:1.1rem;padding:6px 8px;border-radius:8px}
 .del:hover{color:var(--hi)}
+#clr{display:block;margin:14px 0 0 auto;padding:9px 14px;border:1px solid var(--hi);color:var(--hi);background:none;border-radius:10px;cursor:pointer}
 #empty,#login p{color:var(--mut);text-align:center}
 #login{text-align:center;padding:40px 0}.cta{display:inline-block;padding:11px 22px}
 #msg{margin:12px 0;color:var(--mut)}#msg.err{color:var(--hi)}
@@ -50,19 +51,21 @@ ul{list-style:none;margin:0;padding:0;background:var(--sf);border:1px solid var(
 </section>
 <section id="app" hidden>
 <form id="f">
-<input id="t" placeholder="Nuova attività" required autocomplete="off">
+<input id="t" placeholder="Titolo" aria-label="Titolo" required autocomplete="off">
+<textarea id="n" rows="2" placeholder="Descrizione (facoltativa)" aria-label="Descrizione"></textarea>
 <input id="d" type="date" aria-label="Scadenza">
 <select id="p" aria-label="Priorità"><option>Alta</option><option selected>Media</option><option>Bassa</option></select>
 <button>Aggiungi</button>
 </form>
 <ul id="list"></ul>
+<button id="clr" hidden>Elimina completate</button>
 <p id="empty" hidden>Nessuna attività. Aggiungi la prima qui sopra.</p>
 </section>
 </main>
 <script>
 const CLIENT_ID='1086470324299-3t32k8jtvmc6q9dic4sj6c6mu6erec0e.apps.googleusercontent.com';
 const SCOPE='https://www.googleapis.com/auth/drive.file';
-const FOLDER='TODOLIST',FILE='Lista attività',HEAD=['ID','Attività','Scadenza','Priorità','Completata'];
+const FOLDER='TODOLIST',FILE='Lista attività',HEAD=['ID','Titolo','Descrizione','Scadenza','Priorità','Completata'];
 const DRIVE='https://www.googleapis.com/drive/v3/files',SHEETS='https://sheets.googleapis.com/v4/spreadsheets';
 const PRI={Alta:0,Media:1,Bassa:2};
 let client,token,tokenExp=0,pending,fileId,sheetId,sheetTitle,rows=[];
@@ -103,11 +106,15 @@ async function setup(){
   if(created)fileId=(await api(DRIVE,{method:'POST',body:JSON.stringify({name:FILE,mimeType:'application/vnd.google-apps.spreadsheet',parents:[fid]})})).id;
   const m=await api(`${SHEETS}/${fileId}?fields=sheets.properties`);
   sheetId=m.sheets[0].properties.sheetId;sheetTitle=m.sheets[0].properties.title;
-  if(created)await api(`${SHEETS}/${fileId}/values/${rng('A1:E1')}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[HEAD]})});
+  let head=[];
+  if(!created)head=((await api(`${SHEETS}/${fileId}/values/${rng('A1:F1')}`)).values||[[]])[0];
+  const old=head[1]==='Attività';
+  if(old)await api(`${SHEETS}/${fileId}:batchUpdate`,{method:'POST',body:JSON.stringify({requests:[{insertDimension:{range:{sheetId,dimension:'COLUMNS',startIndex:2,endIndex:3},inheritFromBefore:false}}]})});
+  if(created||old)await api(`${SHEETS}/${fileId}/values/${rng('A1:F1')}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[HEAD]})});
 }
 async function fetchRows(){
-  const r=await api(`${SHEETS}/${fileId}/values/${rng('A2:E')}`);
-  rows=(r.values||[]).map((v,i)=>({row:i+2,id:v[0]||'t:'+(v[1]||''),text:v[1]||'',due:v[2]||'',pri:v[3]||'Media',done:v[4]==='SI'})).filter(t=>t.text);
+  const r=await api(`${SHEETS}/${fileId}/values/${rng('A2:F')}`);
+  rows=(r.values||[]).map((v,i)=>({row:i+2,id:v[0]||'t:'+(v[1]||''),text:v[1]||'',desc:v[2]||'',due:v[3]||'',pri:v[4]||'Media',done:v[5]==='SI'})).filter(t=>t.text);
 }
 const load=async()=>{await fetchRows();render()};
 async function start(){
@@ -116,13 +123,14 @@ async function start(){
 }
 const run=async fn=>{try{msg('');await fn()}catch(e){msg('Errore: '+e.message,true)}};
 const act=(id,fn)=>run(async()=>{await fetchRows();const t=rows.find(x=>x.id===id);if(t)await fn(t);await load()});
-const toggle=id=>act(id,t=>api(`${SHEETS}/${fileId}/values/${rng('E'+t.row)}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[[t.done?'NO':'SI']]})}));
+const toggle=id=>act(id,t=>api(`${SHEETS}/${fileId}/values/${rng('F'+t.row)}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[[t.done?'NO':'SI']]})}));
 const remove=id=>act(id,t=>api(`${SHEETS}/${fileId}:batchUpdate`,{method:'POST',body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId,dimension:'ROWS',startIndex:t.row-1,endIndex:t.row}}}]})}));
 
 function render(){
   const today=new Date().toLocaleDateString('sv-SE');
   const l=[...rows].sort((a,b)=>a.done-b.done||(a.due||'9999').localeCompare(b.due||'9999')||(PRI[a.pri]??1)-(PRI[b.pri]??1));
   const ul=$('#list');ul.replaceChildren();$('#empty').hidden=l.length>0;ul.hidden=!l.length;
+  const nd=l.filter(t=>t.done).length;$('#clr').hidden=!nd;$('#clr').textContent='Elimina completate ('+nd+')';
   for(const t of l){
     const li=document.createElement('li');
     li.className='t '+t.pri+(t.done?' done':'')+(!t.done&&t.due&&t.due<today?' late':'');
@@ -132,7 +140,9 @@ function render(){
     const m=document.createElement('span');m.className='meta';
     if(t.due){const d=document.createElement('span');d.className='due';d.textContent='Entro il '+fmt(t.due);m.append(d)}
     const p=document.createElement('span');p.textContent='Priorità '+t.pri.toLowerCase();m.append(p);
-    b.append(s,m);
+    b.append(s);
+    if(t.desc){const q=document.createElement('span');q.className='desc';q.textContent=t.desc;b.append(q)}
+    b.append(m);
     const x=document.createElement('button');x.className='del';x.textContent='✕';x.setAttribute('aria-label','Elimina attività');x.onclick=()=>remove(t.id);
     li.append(cb,b,x);ul.append(li);
   }
@@ -141,9 +151,19 @@ function render(){
 $('#f').onsubmit=e=>{
   e.preventDefault();const t=$('#t').value.trim();if(!t)return;
   run(async()=>{
-    await api(`${SHEETS}/${fileId}/values/${rng('A:E')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
-      {method:'POST',body:JSON.stringify({values:[[uid(),t,$('#d').value,$('#p').value,'NO']]})});
-    $('#t').value='';$('#d').value='';await load();
+    await api(`${SHEETS}/${fileId}/values/${rng('A:F')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      {method:'POST',body:JSON.stringify({values:[[uid(),t,$('#n').value.trim(),$('#d').value,$('#p').value,'NO']]})});
+    $('#t').value='';$('#n').value='';$('#d').value='';await load();
+  });
+};
+$('#clr').onclick=()=>{
+  const n=rows.filter(t=>t.done).length;
+  if(!n||!confirm(n===1?'Eliminare l’attività completata? L’azione non si può annullare.':`Eliminare le ${n} attività completate? L’azione non si può annullare.`))return;
+  run(async()=>{
+    await fetchRows();
+    const d=rows.filter(t=>t.done).sort((a,b)=>b.row-a.row);
+    if(d.length)await api(`${SHEETS}/${fileId}:batchUpdate`,{method:'POST',body:JSON.stringify({requests:d.map(t=>({deleteDimension:{range:{sheetId,dimension:'ROWS',startIndex:t.row-1,endIndex:t.row}}}))})});
+    await load();
   });
 };
 $('#go').onclick=()=>client&&client.requestAccessToken({prompt:''});
