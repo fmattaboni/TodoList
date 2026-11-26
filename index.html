@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cose da fare</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#2455d6">
+<style>
+:root{color-scheme:light dark;--bg:#eef1f5;--sf:#fff;--ink:#15202b;--mut:#5d6b7a;--line:#d9dfe6;--ac:#2455d6;--acink:#fff;--hi:#c92a2a;--mid:#d98200;--lo:#2b8a5a}
+@media (prefers-color-scheme:dark){:root{--bg:#0f151c;--sf:#18212b;--ink:#e6ebf0;--mut:#8a98a8;--line:#263341;--ac:#6f96ff;--acink:#0f151c;--hi:#ff7b7b;--mid:#f0a830;--lo:#5cc48c}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Avenir Next","Segoe UI",system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:640px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px}
+h1{font-size:1.6rem;margin:0;letter-spacing:-.01em}
+button,input,select{font:inherit;color:inherit}
+.link{background:none;border:0;color:var(--mut);cursor:pointer;text-decoration:underline;padding:4px}
+form{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+form input,form select{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sf);min-width:0}
+#t{grid-column:1/-1}
+form button,.cta{grid-column:1/-1;padding:11px;border:0;border-radius:10px;background:var(--ac);color:var(--acink);font-weight:600;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+ul{list-style:none;margin:0;padding:0;background:var(--sf);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.t{display:flex;gap:12px;align-items:center;padding:12px 12px 12px 14px;border-bottom:1px solid var(--line);border-left:5px solid var(--mid)}
+.t:last-child{border-bottom:0}
+.t.Alta{border-left-color:var(--hi)}.t.Bassa{border-left-color:var(--lo)}
+.t input{width:20px;height:20px;accent-color:var(--ac);flex:none}
+.body{flex:1;min-width:0;display:flex;flex-direction:column}
+.txt{overflow-wrap:anywhere}
+.meta{font-size:.85rem;color:var(--mut);display:flex;gap:10px}
+.late .due{color:var(--hi);font-weight:600}
+.done .txt{text-decoration:line-through;color:var(--mut)}.done{opacity:.7}
+.del{background:none;border:0;color:var(--mut);cursor:pointer;font-size:1.1rem;padding:6px 8px;border-radius:8px}
+.del:hover{color:var(--hi)}
+#empty,#login p{color:var(--mut);text-align:center}
+#login{text-align:center;padding:40px 0}.cta{display:inline-block;padding:11px 22px}
+#msg{margin:12px 0;color:var(--mut)}#msg.err{color:var(--hi)}
+</style>
+</head>
+<body>
+<main>
+<header><h1>Cose da fare</h1><button class="link" id="out" hidden>Esci</button></header>
+<div id="msg"></div>
+<section id="login" hidden>
+<p>Accedi con l’account Google dell’associazione per aprire la lista condivisa.</p>
+<button class="cta" id="go">Accedi con Google</button>
+</section>
+<section id="app" hidden>
+<form id="f">
+<input id="t" placeholder="Nuova attività" required autocomplete="off">
+<input id="d" type="date" aria-label="Scadenza">
+<select id="p" aria-label="Priorità"><option>Alta</option><option selected>Media</option><option>Bassa</option></select>
+<button>Aggiungi</button>
+</form>
+<ul id="list"></ul>
+<p id="empty" hidden>Nessuna attività. Aggiungi la prima qui sopra.</p>
+</section>
+</main>
+<script>
+const CLIENT_ID='INSERISCI_QUI_IL_TUO_CLIENT_ID.apps.googleusercontent.com';
+const SCOPE='https://www.googleapis.com/auth/drive.file';
+const FOLDER='TODOLIST',FILE='Lista attività',HEAD=['ID','Attività','Scadenza','Priorità','Completata'];
+const DRIVE='https://www.googleapis.com/drive/v3/files',SHEETS='https://sheets.googleapis.com/v4/spreadsheets';
+const PRI={Alta:0,Media:1,Bassa:2};
+let client,token,tokenExp=0,pending,fileId,sheetId,sheetTitle,rows=[];
+const $=s=>document.querySelector(s);
+const msg=(t,err)=>{const e=$('#msg');e.textContent=t||'';e.className=err?'err':''};
+const show=login=>{$('#login').hidden=!login;$('#app').hidden=login;$('#out').hidden=login};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const rng=a=>encodeURIComponent(`'${sheetTitle}'!${a}`);
+const fmt=d=>new Date(d+'T00:00').toLocaleDateString('it-IT',{day:'numeric',month:'short'});
+
+function setTok(r){token=r.access_token;tokenExp=Date.now()+(r.expires_in-60)*1000;localStorage.setItem('connected','1')}
+function initAuth(){
+  if(CLIENT_ID.startsWith('INSERISCI')){show(true);msg('Manca il Client ID: apri index.html e sostituisci INSERISCI_QUI_IL_TUO_CLIENT_ID all’inizio dello script.',true);return}
+  client=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPE,
+    callback:r=>{if(r.error){pending?pending.rej(r):show(true);pending=null;return}
+      setTok(r);if(pending){pending.res();pending=null}else start()},
+    error_callback:e=>{pending?pending.rej(e):show(true);pending=null}});
+  localStorage.getItem('connected')?client.requestAccessToken({prompt:''}):show(true);
+}
+const ensureToken=()=>token&&Date.now()<tokenExp?Promise.resolve():
+  new Promise((res,rej)=>{pending={res,rej};client.requestAccessToken({prompt:''})});
+
+async function api(url,opt={}){
+  await ensureToken();
+  const r=await fetch(url,{...opt,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}});
+  if(!r.ok)throw new Error(r.status+' '+(await r.text()).slice(0,200));
+  return r.status===204?null:r.json();
+}
+async function findOne(q){
+  const r=await api(DRIVE+'?spaces=drive&fields=files(id)&q='+encodeURIComponent(q));
+  return r.files[0]&&r.files[0].id;
+}
+async function setup(){
+  let fid=await findOne(`name='${FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  if(!fid)fid=(await api(DRIVE,{method:'POST',body:JSON.stringify({name:FOLDER,mimeType:'application/vnd.google-apps.folder'})})).id;
+  fileId=await findOne(`name='${FILE}' and '${fid}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
+  const created=!fileId;
+  if(created)fileId=(await api(DRIVE,{method:'POST',body:JSON.stringify({name:FILE,mimeType:'application/vnd.google-apps.spreadsheet',parents:[fid]})})).id;
+  const m=await api(`${SHEETS}/${fileId}?fields=sheets.properties`);
+  sheetId=m.sheets[0].properties.sheetId;sheetTitle=m.sheets[0].properties.title;
+  if(created)await api(`${SHEETS}/${fileId}/values/${rng('A1:E1')}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[HEAD]})});
+}
+async function fetchRows(){
+  const r=await api(`${SHEETS}/${fileId}/values/${rng('A2:E')}`);
+  rows=(r.values||[]).map((v,i)=>({row:i+2,id:v[0]||'t:'+(v[1]||''),text:v[1]||'',due:v[2]||'',pri:v[3]||'Media',done:v[4]==='SI'})).filter(t=>t.text);
+}
+const load=async()=>{await fetchRows();render()};
+async function start(){
+  show(false);msg('Collegamento a Google Drive…');
+  try{await setup();await load();msg('')}catch(e){msg('Errore: '+e.message,true)}
+}
+const run=async fn=>{try{msg('');await fn()}catch(e){msg('Errore: '+e.message,true)}};
+const act=(id,fn)=>run(async()=>{await fetchRows();const t=rows.find(x=>x.id===id);if(t)await fn(t);await load()});
+const toggle=id=>act(id,t=>api(`${SHEETS}/${fileId}/values/${rng('E'+t.row)}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[[t.done?'NO':'SI']]})}));
+const remove=id=>act(id,t=>api(`${SHEETS}/${fileId}:batchUpdate`,{method:'POST',body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId,dimension:'ROWS',startIndex:t.row-1,endIndex:t.row}}}]})}));
+
+function render(){
+  const today=new Date().toLocaleDateString('sv-SE');
+  const l=[...rows].sort((a,b)=>a.done-b.done||(a.due||'9999').localeCompare(b.due||'9999')||(PRI[a.pri]??1)-(PRI[b.pri]??1));
+  const ul=$('#list');ul.replaceChildren();$('#empty').hidden=l.length>0;ul.hidden=!l.length;
+  for(const t of l){
+    const li=document.createElement('li');
+    li.className='t '+t.pri+(t.done?' done':'')+(!t.done&&t.due&&t.due<today?' late':'');
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=t.done;cb.setAttribute('aria-label','Completata');cb.onchange=()=>toggle(t.id);
+    const b=document.createElement('div');b.className='body';
+    const s=document.createElement('span');s.className='txt';s.textContent=t.text;
+    const m=document.createElement('span');m.className='meta';
+    if(t.due){const d=document.createElement('span');d.className='due';d.textContent='Entro il '+fmt(t.due);m.append(d)}
+    const p=document.createElement('span');p.textContent='Priorità '+t.pri.toLowerCase();m.append(p);
+    b.append(s,m);
+    const x=document.createElement('button');x.className='del';x.textContent='✕';x.setAttribute('aria-label','Elimina attività');x.onclick=()=>remove(t.id);
+    li.append(cb,b,x);ul.append(li);
+  }
+}
+
+$('#f').onsubmit=e=>{
+  e.preventDefault();const t=$('#t').value.trim();if(!t)return;
+  run(async()=>{
+    await api(`${SHEETS}/${fileId}/values/${rng('A:E')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      {method:'POST',body:JSON.stringify({values:[[uid(),t,$('#d').value,$('#p').value,'NO']]})});
+    $('#t').value='';$('#d').value='';await load();
+  });
+};
+$('#go').onclick=()=>client&&client.requestAccessToken({prompt:''});
+$('#out').onclick=()=>{localStorage.removeItem('connected');token=null;fileId=null;show(true);msg('')};
+setInterval(()=>{if(!document.hidden&&fileId&&Date.now()<tokenExp)load().catch(()=>{})},30000);
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="initAuth()"></script>
+</body>
+</html>
